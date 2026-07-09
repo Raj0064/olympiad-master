@@ -9,7 +9,7 @@ lerna-debug.log*
 
 .env
 Data.txt 
-src\script\seed.js
+src/script/seed.js
 
 node_modules
 dist
