@@ -15,7 +15,7 @@ import { useState, useRef, useEffect } from 'react';
 const navItems = [
   { label: 'Dashboard', path: '/student', icon: HiOutlineHome, exact: true },
   { label: 'Exams', path: '/student/exams', icon: HiOutlineClipboardDocumentList },
-  { label: 'Classroom', path: '/student/classroom', icon: HiOutlineBookOpen },  // ← ADD THIS
+  { label: 'Notes', path: '/student/notes', icon: HiOutlineBookOpen },  // ← ADD THIS
   { label: 'Performance', path: '/student/performance', icon: HiOutlineChartBar },
 ];
 

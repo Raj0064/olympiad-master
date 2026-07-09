@@ -105,9 +105,8 @@ export default function StudentPerformance() {
 function PageHeader({ grade, totalAttempted }) {
   return (
     <div>
-      <h2 className="text-xl font-semibold text-dark">Performance</h2>
+      <h2 className="text-xl font-semibold text-dark">My Performance</h2>
       <p className="text-sm text-muted mt-0.5">
-        Grade {grade} · Olympiad Maths
         {totalAttempted > 0 && <> · {totalAttempted} exam{totalAttempted !== 1 ? 's' : ''} attempted</>}
       </p>
     </div>

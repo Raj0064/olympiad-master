@@ -13,7 +13,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 const navItems = [
   { label: 'Dashboard', path: '/student', icon: HiOutlineHome, exact: true },
   { label: 'Exams', path: '/student/exams', icon: HiOutlineClipboardDocumentList },
-  { label: 'Classroom', path: '/student/classroom', icon: HiOutlineBookOpen },  // ← ADD THIS
+  { label: 'Notes', path: '/student/notes', icon: HiOutlineBookOpen },  // ← ADD THIS
   { label: 'Performance', path: '/student/performance', icon: HiOutlineChartBar },
 ];
 
@@ -37,8 +37,8 @@ export default function StudentBottomNav() {
               to={path}
               end={item.exact}
               className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all duration-150 ${active
-                  ? 'text-primary bg-white'
-                  : 'text-blue-200/70'
+                ? 'text-primary bg-white'
+                : 'text-blue-200/70'
                 }`}
             >
               <Icon className="w-5 h-5" />

@@ -6,6 +6,8 @@ import {
   updateStudent,
   deleteStudent,
   resetStudentPassword,
+  permanentlyDeleteStudent,
+  enableStudent,
 } from '../../services/student.service';
 import { getBatch, getBatches } from '../../services/batch.service';
 import { getExam, getExamQuestions } from '../../services/exam.service';
@@ -329,6 +331,7 @@ export default function ViewStudent() {
   const [modal, setModal] = useState(null); // 'edit'
   const [expandedExamId, setExpandedExamId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmPermanentDelete, setConfirmPermanentDelete] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [actionPending, setActionPending] = useState(false);
   const [actionMsg, setActionMsg] = useState('');
@@ -409,16 +412,37 @@ export default function ViewStudent() {
   // ── Actions ───────────────────────────────────────────────────────────────
   async function handleDelete(e) {
     e.stopPropagation();
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
+    if (!confirmDelete) { setConfirmDelete(true); return; }
     setActionPending(true);
     try {
-      await deleteStudent(uid);
+      if (student.disabled) {
+        await enableStudent(uid);
+        setStudent((s) => ({ ...s, disabled: false }));
+        setActionMsg('Student enabled.');
+        setTimeout(() => setActionMsg(''), 3000);
+      } else {
+        await deleteStudent(uid);
+        setStudent((s) => ({ ...s, disabled: true }));
+        setActionMsg('Student disabled.');
+        setTimeout(() => setActionMsg(''), 3000);
+      }
+      setConfirmDelete(false);
+    } catch {
+      setError('Action failed.');
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function handlePermanentDelete(e) {
+    e.stopPropagation();
+    if (!confirmPermanentDelete) { setConfirmPermanentDelete(true); return; }
+    setActionPending(true);
+    try {
+      await permanentlyDeleteStudent(uid);
       navigate('/admin/students');
     } catch {
-      setError('Failed to delete student.');
+      setError('Failed to permanently delete student.');
       setActionPending(false);
     }
   }
@@ -445,6 +469,7 @@ export default function ViewStudent() {
   function handlePageClick() {
     setConfirmDelete(false);
     setConfirmReset(false);
+    setConfirmPermanentDelete(false); // add this
   }
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -571,24 +596,50 @@ export default function ViewStudent() {
               </button>
             )}
 
+            {/* Disable / Enable toggle */}
             <button
               onClick={handleDelete}
               disabled={actionPending}
               className={`text-xs px-3.5 py-1.5 rounded-lg transition-colors
-                          disabled:opacity-50
-                          ${confirmDelete
-                  ? 'bg-red-600 text-white hover:bg-red-700'
-                  : 'border border-red-200 text-red-500 hover:border-red-400'
+              disabled:opacity-50
+              ${confirmDelete
+                  ? student.disabled
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-orange-500 text-white hover:bg-orange-600'
+                  : student.disabled
+                    ? 'border border-green-300 text-green-600 hover:border-green-400'
+                    : 'border border-orange-200 text-orange-500 hover:border-orange-400'
                 }`}
             >
-              {confirmDelete ? 'Sure? Delete' : 'Delete'}
+              {confirmDelete
+                ? student.disabled ? 'Sure? Enable' : 'Sure? Disable'
+                : student.disabled ? 'Enable' : 'Disable'}
             </button>
             {confirmDelete && (
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirmDelete(false);
-                }}
+                onClick={(e) => { e.stopPropagation(); setConfirmDelete(false); }}
+                className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+
+            {/* Permanent delete */}
+            <button
+              onClick={handlePermanentDelete}
+              disabled={actionPending}
+              className={`text-xs px-3.5 py-1.5 rounded-lg transition-colors
+              disabled:opacity-50
+              ${confirmPermanentDelete
+                  ? 'bg-red-700 text-white hover:bg-red-800'
+                  : 'border border-red-300 text-red-600 hover:border-red-500'
+                }`}
+            >
+              {confirmPermanentDelete ? 'Sure? Permanent Delete' : 'Permanent Delete'}
+            </button>
+            {confirmPermanentDelete && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setConfirmPermanentDelete(false); }}
                 className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
               >
                 Cancel

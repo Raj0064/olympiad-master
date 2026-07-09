@@ -291,9 +291,10 @@ export default function AdminCreateExam() {
             sections={sections}
             batchName={batchName}
             isEditMode={isEditMode}
+            onInstructionsChange={(inst) => setExam(prev => ({ ...prev, instructions: inst }))}
           />
         )}
-
+        
         {saveError && (
           <p className="mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
             {saveError}

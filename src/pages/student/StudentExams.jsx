@@ -126,7 +126,7 @@ export default function StudentExams() {
     <div className="space-y-5">
       <div>
         <h2 className="text-xl font-semibold text-dark">My Exams</h2>
-        <p className="text-sm text-muted mt-0.5">Grade {grade} · Olympiad Maths</p>
+
       </div>
 
       {/* Tabs */}

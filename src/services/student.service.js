@@ -8,6 +8,9 @@
  *   secondaryAuth is a separate Firebase app instance with its own
  *   auth state, so the admin session is never touched.
  *
+ * selfRegisterStudent is the exception — it intentionally uses the
+ *   primary auth so the student is signed in right after sign-up.
+ *
  * Delete note:
  *   deleteStudent removes the Firestore profile only.
  *   The Firebase Auth account remains but the student cannot access
@@ -34,39 +37,90 @@ import {
   query,
   where,
   orderBy,
+  serverTimestamp,
   documentId,
 } from "firebase/firestore";
 import { db, auth, secondaryAuth } from "../firebase";
 
-// ─── Create ───────────────────────────────────────────────────────────────────
+// ─── Admin: Create student ────────────────────────────────────────────────────
 /**
  * Creates a Firebase Auth account + Firestore profile for a student.
- * Admin session is never affected.
+ * Uses secondaryAuth so the admin session is never affected.
  *
  * @param {{ name, email, password, grade, batchId }} param
  * @returns {string} new student uid
  */
-// ✅ Updated createStudent with cleanup on Firestore failure
-
 export async function createStudent({ name, email, password, grade, batchId }) {
   const cred = await createUserWithEmailAndPassword(
-    secondaryAuth, email.trim().toLowerCase(), password
+    secondaryAuth,
+    email.trim().toLowerCase(),
+    password
   );
   const uid = cred.user.uid;
   await signOut(secondaryAuth);
 
   try {
-    await setDoc(doc(db, 'users', uid), {
+    await setDoc(doc(db, "users", uid), {
       name: name.trim(),
       email: email.trim().toLowerCase(),
-      role: 'student',
+      role: "student",
       grade: String(grade),
-      batchId: batchId || '',
+      batchId: batchId || "",
+      disabled: false, // ← explicit; Login checks this field
+      createdAt: serverTimestamp(),
     });
   } catch (err) {
-    // Auth account exists but profile failed — delete the auth user
-    // to prevent a ghost account that blocks re-registration
-    try { await cred.user.delete(); } catch { /* best-effort */ }
+    // Auth account exists but profile write failed — delete it to prevent
+    // a ghost account that blocks re-registration with the same email.
+    try {
+      await cred.user.delete();
+    } catch {
+      /* best-effort */
+    }
+    throw err;
+  }
+
+  return uid;
+}
+
+// ─── Self-registration ────────────────────────────────────────────────────────
+/**
+ * Called from AuthContext.register() during the student sign-up flow.
+ * Uses the PRIMARY auth instance so the student is signed in automatically
+ * after account creation — no secondaryAuth needed here.
+ *
+ * Unlike createStudent (admin flow), there is no batchId at sign-up time;
+ * an admin can assign one later via updateStudent.
+ *
+ * @param {{ name, email, password, grade }} param
+ * @returns {string} new student uid
+ */
+export async function selfRegisterStudent({ name, email, password, grade }) {
+  const cred = await createUserWithEmailAndPassword(
+    auth, // ← primary auth; student gets signed in
+    email.trim().toLowerCase(),
+    password
+  );
+  const uid = cred.user.uid;
+
+  try {
+    await setDoc(doc(db, "users", uid), {
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      role: "student",
+      grade: String(grade),
+      batchId: "", // admin assigns later
+      disabled: false,
+      createdAt: serverTimestamp(),
+    });
+  } catch (err) {
+    // Profile write failed — delete the dangling Auth account so the
+    // student can retry registration with the same email.
+    try {
+      await cred.user.delete();
+    } catch {
+      /* best-effort */
+    }
     throw err;
   }
 
@@ -109,25 +163,25 @@ export async function updateStudent(uid, data) {
   await updateDoc(doc(db, "users", uid), normalized);
 }
 
-
 export async function resetStudentPassword(email) {
   await sendPasswordResetEmail(auth, email);
 }
 
-// ─── Delete ───────────────────────────────────────────────────────────────────
-
+// ─── Disable / Enable ────────────────────────────────────────────────────────
 export async function deleteStudent(uid) {
-  // await deleteDoc(doc(db, "users", uid));
   await updateDoc(doc(db, "users", uid), { disabled: true });
 }
 
-//Enable Student
 export async function enableStudent(uid) {
   await updateDoc(doc(db, "users", uid), { disabled: false });
 }
 
+// ─── Permanent (hard) delete ─────────────────────────────────────────────────
+export async function permanentlyDeleteStudent(uid) {
+  await deleteDoc(doc(db, "users", uid));
+}
 
-
+// ─── Password change (student-initiated) ─────────────────────────────────────
 export async function changeStudentPassword(
   currentUser,
   currentPassword,
@@ -137,11 +191,12 @@ export async function changeStudentPassword(
     currentUser.email,
     currentPassword
   );
-  await reauthenticateWithCredential(currentUser, credential); // required by Firebase before sensitive ops
+  await reauthenticateWithCredential(currentUser, credential);
   await updatePassword(currentUser, newPassword);
 }
 
-// Look up a student by email — used by bulk results import
+// ─── Lookup by email ─────────────────────────────────────────────────────────
+/** Used by bulk results import. */
 export async function getStudentByEmail(email) {
   const q = query(
     collection(db, "users"),
@@ -153,6 +208,7 @@ export async function getStudentByEmail(email) {
   return { id: snap.docs[0].id, ...snap.docs[0].data() };
 }
 
+// ─── Batch fetch by UID array ────────────────────────────────────────────────
 /**
  * Batch-fetch student profiles by user ID array.
  * Uses Firestore `whereIn` in chunks of 30 (Firestore limit).
@@ -166,26 +222,22 @@ export async function getStudentByEmail(email) {
 export async function getStudentsByIds(ids) {
   if (!ids || ids.length === 0) return {};
 
-  // Deduplicate
   const unique = [...new Set(ids)];
-
-  // Split into chunks of 30 (Firestore whereIn limit)
   const chunks = [];
   for (let i = 0; i < unique.length; i += 30) {
     chunks.push(unique.slice(i, i + 30));
   }
 
   const map = {};
-
   await Promise.all(
     chunks.map(async (chunk) => {
       const q = query(
-        collection(db, 'users'),
-        where(documentId(), 'in', chunk)
+        collection(db, "users"),
+        where(documentId(), "in", chunk)
       );
       const snap = await getDocs(q);
-      snap.forEach((doc) => {
-        map[doc.id] = { id: doc.id, ...doc.data() };
+      snap.forEach((d) => {
+        map[d.id] = { id: d.id, ...d.data() };
       });
     })
   );

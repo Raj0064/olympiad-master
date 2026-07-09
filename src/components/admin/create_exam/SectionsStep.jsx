@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { uploadImage } from "../../../lib/cloudinary";
 import { getTopics, getSubtopics } from "../../../services/topic.service";
+import { AiOutlineEdit } from "react-icons/ai";
+import { RiDeleteBin6Line } from "react-icons/ri";
+import { IoCopyOutline } from "react-icons/io5";
+import ExportModal from "./Exportmodal";
 
 const OPTIONS = ["A", "B", "C", "D"];
 const SIZES = [
@@ -871,6 +875,8 @@ function JsonPaster({ onImport, hasExistingQuestions }) {
 
 // ─── ImportPreview ─────────────────────────────────────────────────────────────
 function ImportPreview({ preview, hasExistingQuestions, onImport, onReset }) {
+
+  const [showExport, setShowExport] = useState(false);
   return (
     <div className="space-y-3">
       {/* Success header */}
@@ -1019,6 +1025,33 @@ function ImportPreview({ preview, hasExistingQuestions, onImport, onReset }) {
       </div>
 
       {/* Import CTA */}
+      {/* <div className="flex items-center gap-3 pt-1">
+        <button
+          type="button"
+          onClick={() => onImport(preview)}
+          className="
+            text-sm font-semibold
+            bg-primary hover:bg-primary-hover
+            text-white px-5 py-2.5 rounded-xl
+            transition-all duration-150 shadow-sm
+            hover:shadow-md active:scale-[0.98]
+          "
+        >
+          Import {preview.totalQ} Questions →
+        </button>
+        <p className="text-xs text-text-faint">
+          You can edit any question after import
+        </p>
+      </div> */}
+
+      {showExport && (
+        <ExportModal
+          sections={preview.sections}
+          title={preview.title}
+          onClose={() => setShowExport(false)}
+        />
+      )}
+
       <div className="flex items-center gap-3 pt-1">
         <button
           type="button"
@@ -1032,6 +1065,13 @@ function ImportPreview({ preview, hasExistingQuestions, onImport, onReset }) {
           "
         >
           Import {preview.totalQ} Questions →
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowExport(true)}
+          className="flex items-center gap-1.5 text-xs font-medium border border-border text-text-muted hover:text-text-dark hover:border-border-strong hover:bg-background px-3 py-2 rounded-xl transition-all duration-150"
+        >
+          <IoCopyOutline size={13} /> Export
         </button>
         <p className="text-xs text-text-faint">
           You can edit any question after import
@@ -1158,6 +1198,7 @@ export default function SectionsStep({
   const [editingQ, setEditingQ] = useState(null);
 
   // ── Topics (loaded from Firestore when grade is known) ───────────────────────
+  const [showExport, setShowExport] = useState(false);
   const [topics, setTopics] = useState([]);
   const [topicsLoading, setTopicsLoading] = useState(false);
 
@@ -1669,20 +1710,20 @@ export default function SectionsStep({
 
                     {/* Edit / Delete — hidden in select mode */}
                     {!selectMode && (
-                      <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                      <div className="flex gap-1.5 transition-opacity flex-shrink-0">
                         <button
                           type="button"
                           onClick={() => handleEditQuestion(q)}
                           className="text-xs font-medium text-accent hover:bg-accent/8 px-2 py-1 rounded-lg transition-colors"
                         >
-                          Edit
+                          <AiOutlineEdit /> 
                         </button>
                         <button
                           type="button"
                           onClick={() => deleteQuestion(q.id)}
                           className="text-xs font-medium text-danger/60 hover:text-danger hover:bg-danger-bg px-2 py-1 rounded-lg transition-colors"
                         >
-                          Del
+                          <RiDeleteBin6Line />
                         </button>
                       </div>
                     )}
@@ -1704,12 +1745,26 @@ export default function SectionsStep({
               </div>
 
               {/* ── Bottom action bar ── */}
-              {!showForm && (
+              {/* {!showForm && (
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
                     onClick={() => {
-                      setEditingQ(null);
+                      setEditingQ(null); */}
+                {showExport && (
+                  <ExportModal
+                    sections={sections}
+                    title=""
+                    onClose={() => setShowExport(false)}
+                  />
+                )}
+
+                {!showForm && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingQ(null);
                       setShowForm(true);
                       exitSelectMode();
                     }}
@@ -1740,7 +1795,18 @@ export default function SectionsStep({
                       Loading topics…
                     </span>
                   )}
+
+                    {totalExistingQ > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowExport(true)}
+                        className="text-sm font-medium border-2 border-dashed border-border text-text-muted px-4 py-3 rounded-xl hover:bg-background hover:border-border-strong hover:text-text-dark transition-all duration-150 flex items-center gap-2"
+                      >
+                        <IoCopyOutline size={14} /> Export
+                      </button>
+                    )}
                 </div>
+                
               )}
 
               {/* Question form */}

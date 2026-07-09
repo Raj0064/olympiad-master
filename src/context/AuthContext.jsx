@@ -12,6 +12,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import { selfRegisterStudent } from "../services/student.service";
 
 const AuthContext = createContext(null);
 
@@ -22,6 +23,8 @@ export default function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState(false);
+
+  
 
   const fetchProfile = useCallback(async (uid) => {
     setProfileError(false);
@@ -34,6 +37,10 @@ export default function AuthProvider({ children }) {
       setProfileError(true);
     }
   }, []);
+
+
+
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -50,16 +57,24 @@ export default function AuthProvider({ children }) {
     return unsubscribe;
   }, [fetchProfile]);
 
+  const register = async (email, password, profile) => {
+    await selfRegisterStudent({ email, password, ...profile });
+    if (auth.currentUser) await fetchProfile(auth.currentUser.uid);
+  };
+
   const login = (email, password) => signInWithEmailAndPassword(auth, email, password);
   const logout = () => signOut(auth);
-  const refreshProfile = () => currentUser?.uid && fetchProfile(currentUser.uid);
-
+  const refreshProfile = () => {
+    if (currentUser?.uid) return fetchProfile(currentUser.uid);
+    return Promise.resolve();
+  };
   const value = {
     currentUser,
     userProfile,
     loading,
     profileError,
     login,
+    register,
     logout,
     refreshProfile,
     isAdmin: userProfile?.role === "admin",

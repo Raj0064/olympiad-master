@@ -23,8 +23,19 @@ import {
   HiOutlineEye,
   HiOutlineSquares2X2,
   HiOutlineListBullet,
-  HiOutlineUsers,
 } from 'react-icons/hi2';
+
+// ── Constants ─────────────────────────────────────────────
+
+const TYPE_MAP = { homework: 'homework', notes: 'note', materials: 'material' };
+const EMPTY_MSG = { notes: 'No class notes posted yet', homework: 'No homework assigned yet', materials: 'No materials shared yet' };
+const TAB_COLORS = { homework: 'bg-orange-100 text-orange-700', notes: 'bg-blue-100 text-blue-700', materials: 'bg-purple-100 text-purple-700' };
+
+const TABS = [
+  { key: 'homework', label: 'Homework', icon: HiOutlineClipboardDocumentCheck },
+  { key: 'notes', label: 'Notes', icon: HiOutlineDocumentText },
+  { key: 'materials', label: 'Materials', icon: HiOutlineBookOpen },
+];
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -43,26 +54,18 @@ function timeAgo(date) {
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 }
 
-function getDriveEmbedUrl(url) {
+function extractDriveId(url) {
   if (!url) return null;
-  const m = url.match(/\/file\/d\/([^/]+)/) || url.match(/[?&]id=([^&]+)/) || url.match(/\/document\/d\/([^/]+)/);
-  if (!m) return null;
-  return `https://drive.google.com/file/d/${m[1]}/preview`;
+  const m =
+    url.match(/\/file\/d\/([^/]+)/) ||
+    url.match(/[?&]id=([^&]+)/) ||
+    url.match(/\/document\/d\/([^/]+)/);
+  return m ? m[1] : null;
 }
 
-function getDriveThumbnailUrl(url) {
-  if (!url) return null;
-  const m = url.match(/\/file\/d\/([^/]+)/) || url.match(/[?&]id=([^&]+)/) || url.match(/\/document\/d\/([^/]+)/);
-  if (!m) return null;
-  return `https://lh3.googleusercontent.com/d/${m[1]}=w400`;
-}
-
-function getDriveViewUrl(url) {
-  if (!url) return url;
-  const m = url.match(/\/file\/d\/([^/]+)/) || url.match(/[?&]id=([^&]+)/) || url.match(/\/document\/d\/([^/]+)/);
-  if (!m) return url;
-  return `https://drive.google.com/file/d/${m[1]}/view`;
-}
+const getDriveEmbedUrl = (url) => { const id = extractDriveId(url); return id ? `https://drive.google.com/file/d/${id}/preview` : null; };
+const getDriveThumbnailUrl = (url) => { const id = extractDriveId(url); return id ? `https://lh3.googleusercontent.com/d/${id}=w400` : null; };
+const getDriveViewUrl = (url) => { const id = extractDriveId(url); return id ? `https://drive.google.com/file/d/${id}/view` : url; };
 
 // ── Main Component ────────────────────────────────────────
 
@@ -72,24 +75,31 @@ export default function StudentClass() {
   const [activeTab, setActiveTab] = useState('homework');
   const [viewMode, setViewMode] = useState('grid');
   const [content, setContent] = useState([]);
-  // { [contentId]: { completedAt } }
-  const [completedMap, setCompletedMap] = useState({});
+  const [completedMap, setCompletedMap] = useState({}); // { [contentId]: { completedAt } }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // UI state
   const [viewingFile, setViewingFile] = useState(null);
   const [confirmingId, setConfirmingId] = useState(null);
-  const [markingId, setMarkingId] = useState(null); // loading state per item
+  const [markingId, setMarkingId] = useState(null);
 
   const batchId = userProfile?.batchId;
   const uid = currentUser?.uid;
 
-  // ── Load content + completions ──
+  // ── Load ──────────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
-    if (!batchId || !uid) return;
+    // Guard: no batch or uid yet.
+    // CRITICAL: loading starts true, so we must explicitly set it false here.
+    // This return is before the try/finally, so finally will NOT run.
+    if (!batchId || !uid) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError('');
+
     try {
       const [contentData, completionsData] = await Promise.all([
         getBatchContent(batchId),
@@ -98,54 +108,42 @@ export default function StudentClass() {
 
       setContent(contentData || []);
 
-      // Build completedMap { contentId: { completedAt } }
       const map = {};
       (completionsData || []).forEach((c) => {
         if (c.contentId) map[c.contentId] = { completedAt: c.completedAt };
       });
       setCompletedMap(map);
     } catch (e) {
-      console.error('StudentClass load error:', e);
+      console.error('[StudentClass] load error:', e);
       setError('Failed to load class content. Please try again.');
     } finally {
       setLoading(false);
     }
   }, [batchId, uid]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // ── Mark Complete ──
-  async function handleMarkComplete(contentId) {
+  // ── Mark Complete ─────────────────────────────────────────────────────────
+  const handleMarkComplete = async (contentId) => {
     if (!uid || !batchId) return;
     setMarkingId(contentId);
     try {
       await markComplete(contentId, uid, batchId);
-      setCompletedMap((prev) => ({
-        ...prev,
-        [contentId]: { completedAt: new Date() },
-      }));
+      setCompletedMap((prev) => ({ ...prev, [contentId]: { completedAt: new Date() } }));
     } catch (e) {
-      console.error('markComplete error:', e);
-      // Already completed or error — refresh to sync
+      console.error('[StudentClass] markComplete error:', e);
       if (e?.message === 'Already marked as completed') {
-        setCompletedMap((prev) => ({
-          ...prev,
-          [contentId]: { completedAt: new Date() },
-        }));
+        setCompletedMap((prev) => ({ ...prev, [contentId]: { completedAt: new Date() } }));
       }
     } finally {
       setMarkingId(null);
       setConfirmingId(null);
     }
-  }
+  };
 
-  // ── Filter & sort ──
-  const typeMap = { homework: 'homework', notes: 'note', materials: 'material' };
-
+  // ── Derived ───────────────────────────────────────────────────────────────
   const filtered = content
-    .filter((c) => c.type === typeMap[activeTab])
+    .filter((c) => c.type === TYPE_MAP[activeTab])
     .sort((a, b) => {
       const da = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt || 0);
       const db_ = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt || 0);
@@ -157,96 +155,62 @@ export default function StudentClass() {
   const pendingCount = allHomework.length - completedCount;
 
   const tabCounts = {
-    notes: content.filter((c) => c.type === 'note').length,
     homework: allHomework.length,
+    notes: content.filter((c) => c.type === 'note').length,
     materials: content.filter((c) => c.type === 'material').length,
   };
 
-  const tabColors = {
-    homework: 'bg-orange-100 text-orange-700',
-    notes: 'bg-blue-100 text-blue-700',
-    materials: 'bg-purple-100 text-purple-700',
-  };
+  // ── Early renders ──────────────────────────────────────────────────────────
+  if (loading) return <ClassSkeleton viewMode={viewMode} />;
 
-  const tabs = [
-    { key: 'homework', label: 'Homework', icon: HiOutlineClipboardDocumentCheck },
-    { key: 'notes', label: 'Notes', icon: HiOutlineDocumentText },
-    { key: 'materials', label: 'Materials', icon: HiOutlineBookOpen },
-  ];
-
-  const emptyMessages = {
-    notes: 'No class notes posted yet',
-    homework: 'No homework assigned yet',
-    materials: 'No materials shared yet',
-  };
-
-  // ── No batch ──
-  if (!batchId && !loading) {
+  if (!batchId) {
     return (
       <div className="space-y-5">
-        <div>
-          <h2 className="text-xl font-semibold text-dark">Class</h2>
-          <p className="text-sm text-muted mt-0.5">
-            Grade {userProfile?.grade || '—'} · Olympiad Maths
-          </p>
-        </div>
+        <h2 className="text-xl font-semibold text-dark">Class</h2>
         <EmptyState message="You are not assigned to a batch yet. Contact your admin." />
       </div>
     );
   }
 
-  // ── Loading ──
-  if (loading) return <ClassSkeleton viewMode={viewMode} />;
-
-  // ── Error ──
   if (error) {
     return (
       <div className="space-y-5">
-        <div>
-          <h2 className="text-xl font-semibold text-dark">Class</h2>
-        </div>
+        <h2 className="text-xl font-semibold text-dark">Class</h2>
         <EmptyState message={error} />
       </div>
     );
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
+
       {/* Header */}
       <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-dark">Class</h2>
-          <p className="text-sm text-muted mt-0.5">
-            Grade {userProfile?.grade || '—'} · Olympiad Maths
-          </p>
-        </div>
+        <h2 className="text-xl font-semibold text-dark">My Notes</h2>
 
-        {/* View Toggle */}
+        {/* View toggle */}
         <div className="flex items-center bg-slate-100 rounded-lg p-0.5">
-          <button
-            onClick={() => setViewMode('grid')}
-            className={`p-1.5 rounded-md transition-all cursor-pointer ${viewMode === 'grid'
-              ? 'bg-white shadow-sm text-dark'
-              : 'text-muted hover:text-dark'
-              }`}
-            title="Grid view"
-          >
-            <HiOutlineSquares2X2 className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('list')}
-            className={`p-1.5 rounded-md transition-all cursor-pointer ${viewMode === 'list'
-              ? 'bg-white shadow-sm text-dark'
-              : 'text-muted hover:text-dark'
-              }`}
-            title="List view"
-          >
-            <HiOutlineListBullet className="w-4 h-4" />
-          </button>
+          {[
+            { mode: 'grid', Icon: HiOutlineSquares2X2, label: 'Grid view' },
+            { mode: 'list', Icon: HiOutlineListBullet, label: 'List view' },
+          ].map(({ mode, Icon, label }) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              title={label}
+              className={`p-1.5 rounded-md transition-all cursor-pointer ${viewMode === mode
+                  ? 'bg-white shadow-sm text-dark'
+                  : 'text-muted hover:text-dark'
+                }`}
+            >
+              <Icon className="w-4 h-4" />
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Homework Progress */}
+      {/* Homework progress bar */}
       {activeTab === 'homework' && allHomework.length > 0 && (
         <Card className="px-4 py-3 bg-gradient-to-r from-orange-50 to-amber-50 border-orange-100">
           <div className="flex items-center justify-between">
@@ -267,17 +231,11 @@ export default function StudentClass() {
               <div className="w-24 h-2 bg-orange-100 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-orange-500 rounded-full transition-all duration-500"
-                  style={{
-                    width: `${allHomework.length > 0
-                      ? (completedCount / allHomework.length) * 100
-                      : 0}%`,
-                  }}
+                  style={{ width: `${allHomework.length > 0 ? (completedCount / allHomework.length) * 100 : 0}%` }}
                 />
               </div>
               <span className="text-[11px] font-semibold text-orange-600">
-                {allHomework.length > 0
-                  ? Math.round((completedCount / allHomework.length) * 100)
-                  : 0}%
+                {allHomework.length > 0 ? Math.round((completedCount / allHomework.length) * 100) : 0}%
               </span>
             </div>
           </div>
@@ -286,41 +244,29 @@ export default function StudentClass() {
 
       {/* Tabs */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-lg w-fit overflow-x-auto">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => {
-                setActiveTab(tab.key);
-                setConfirmingId(null);
-              }}
-              className={`px-3 py-1.5 text-[12.5px] font-medium rounded-md transition-all
-                cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${activeTab === tab.key
-                  ? 'bg-white text-dark shadow-sm'
-                  : 'text-muted hover:text-dark'
-                }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {tab.label}
-              {tabCounts[tab.key] > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeTab === tab.key
-                    ? tabColors[tab.key]
-                    : 'bg-slate-200 text-slate-500'
-                    }`}
-                >
-                  {tabCounts[tab.key]}
-                </span>
-              )}
-            </button>
-          );
-        })}
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => { setActiveTab(key); setConfirmingId(null); }}
+            className={`px-3 py-1.5 text-[12.5px] font-medium rounded-md transition-all cursor-pointer
+              whitespace-nowrap flex items-center gap-1.5 ${activeTab === key ? 'bg-white text-dark shadow-sm' : 'text-muted hover:text-dark'
+              }`}
+          >
+            <Icon className="w-3.5 h-3.5" />
+            {label}
+            {tabCounts[key] > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${activeTab === key ? TAB_COLORS[key] : 'bg-slate-200 text-slate-500'
+                }`}>
+                {tabCounts[key]}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Content */}
       {filtered.length === 0 ? (
-        <EmptyState message={emptyMessages[activeTab]} />
+        <EmptyState message={EMPTY_MSG[activeTab]} />
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {filtered.map((item) => (
@@ -332,13 +278,11 @@ export default function StudentClass() {
               isConfirming={confirmingId === item.id}
               isMarking={markingId === item.id}
               completedAt={completedMap[item.id]?.completedAt}
-              onView={() =>
-                setViewingFile({
-                  title: item.title,
-                  embedUrl: getDriveEmbedUrl(item.fileUrl),
-                  viewUrl: getDriveViewUrl(item.fileUrl),
-                })
-              }
+              onView={() => setViewingFile({
+                title: item.title,
+                embedUrl: getDriveEmbedUrl(item.fileUrl),
+                viewUrl: getDriveViewUrl(item.fileUrl),
+              })}
               onConfirmStart={() => setConfirmingId(item.id)}
               onConfirmCancel={() => setConfirmingId(null)}
               onMarkComplete={() => handleMarkComplete(item.id)}
@@ -356,13 +300,11 @@ export default function StudentClass() {
               isConfirming={confirmingId === item.id}
               isMarking={markingId === item.id}
               completedAt={completedMap[item.id]?.completedAt}
-              onView={() =>
-                setViewingFile({
-                  title: item.title,
-                  embedUrl: getDriveEmbedUrl(item.fileUrl),
-                  viewUrl: getDriveViewUrl(item.fileUrl),
-                })
-              }
+              onView={() => setViewingFile({
+                title: item.title,
+                embedUrl: getDriveEmbedUrl(item.fileUrl),
+                viewUrl: getDriveViewUrl(item.fileUrl),
+              })}
               onConfirmStart={() => setConfirmingId(item.id)}
               onConfirmCancel={() => setConfirmingId(null)}
               onMarkComplete={() => handleMarkComplete(item.id)}
@@ -371,7 +313,7 @@ export default function StudentClass() {
         </div>
       )}
 
-      {/* Fullscreen Viewer */}
+      {/* File viewer */}
       {viewingFile && (
         <FileViewer
           title={viewingFile.title}
@@ -387,43 +329,25 @@ export default function StudentClass() {
 // ── Grid Card ─────────────────────────────────────────────
 
 function GridCard({
-  item,
-  isHomework,
-  isCompleted,
-  isConfirming,
-  isMarking,
-  completedAt,
-  onView,
-  onConfirmStart,
-  onConfirmCancel,
-  onMarkComplete,
+  item, isHomework, isCompleted, isConfirming, isMarking, completedAt,
+  onView, onConfirmStart, onConfirmCancel, onMarkComplete,
 }) {
   const hasFile = !!item.fileUrl;
   const thumbnailUrl = getDriveThumbnailUrl(item.fileUrl);
 
-  const accentColor = isHomework
-    ? isCompleted
-      ? 'border-green-400'
-      : 'border-orange-400'
-    : item.type === 'note'
-      ? 'border-blue-400'
-      : 'border-purple-400';
+  const accentBorder = isHomework
+    ? isCompleted ? 'border-green-400' : 'border-orange-400'
+    : item.type === 'note' ? 'border-blue-400' : 'border-purple-400';
 
-  const iconBg = isHomework
-    ? isCompleted
-      ? 'bg-green-50 text-green-500'
-      : 'bg-orange-50 text-orange-500'
-    : item.type === 'note'
-      ? 'bg-blue-50 text-blue-500'
-      : 'bg-purple-50 text-purple-500';
+  const iconStyle = isHomework
+    ? isCompleted ? 'bg-green-50 text-green-500' : 'bg-orange-50 text-orange-500'
+    : item.type === 'note' ? 'bg-blue-50 text-blue-500' : 'bg-purple-50 text-purple-500';
 
   return (
-    <div
-      className={`group relative flex flex-col rounded-xl border-2 ${accentColor}
-        bg-white overflow-hidden transition-all hover:shadow-lg
-        ${isCompleted ? 'opacity-65' : ''}`}
+    <div className={`group relative flex flex-col rounded-xl border-2 ${accentBorder}
+      bg-white overflow-hidden transition-all hover:shadow-lg ${isCompleted ? 'opacity-65' : ''}`}
     >
-      {/* Thumbnail */}
+      {/* Thumbnail / preview trigger */}
       <button
         onClick={hasFile ? onView : undefined}
         className={`relative w-full aspect-[4/3] bg-slate-50 overflow-hidden
@@ -434,64 +358,51 @@ function GridCard({
             <img
               src={thumbnailUrl}
               alt={item.title}
-              className="w-full h-full object-cover transition-transform
-                         group-hover:scale-105"
+              className="w-full h-full object-cover transition-transform group-hover:scale-105"
               onError={(e) => {
                 e.target.style.display = 'none';
                 e.target.nextSibling.style.display = 'flex';
               }}
             />
-            <div
-              className="hidden w-full h-full items-center justify-center
-                          absolute inset-0 bg-slate-50"
-            >
-              <div className={`w-14 h-14 rounded-2xl ${iconBg} flex items-center
-                               justify-center`}>
+            <div className="hidden w-full h-full items-center justify-center absolute inset-0 bg-slate-50">
+              <div className={`w-14 h-14 rounded-2xl ${iconStyle} flex items-center justify-center`}>
                 <HiOutlineDocumentText className="w-7 h-7" />
               </div>
             </div>
           </>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <div className={`w-14 h-14 rounded-2xl ${iconBg} flex items-center
-                             justify-center`}>
+            <div className={`w-14 h-14 rounded-2xl ${iconStyle} flex items-center justify-center`}>
               <HiOutlineDocumentText className="w-7 h-7" />
             </div>
           </div>
         )}
 
-        {/* Hover Overlay */}
+        {/* Hover overlay */}
         {hasFile && (
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40
-                          transition-all flex items-center justify-center">
-            <div className="opacity-0 group-hover:opacity-100 transition-all
-                            transform scale-90 group-hover:scale-100">
-              <div className="w-11 h-11 rounded-full bg-white/90 flex items-center
-                               justify-center shadow-lg">
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all
+            flex items-center justify-center">
+            <div className="opacity-0 group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100">
+              <div className="w-11 h-11 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
                 <HiOutlineEye className="w-5 h-5 text-dark" />
               </div>
             </div>
           </div>
         )}
 
-        {/* Status Badge */}
+        {/* Homework status badge */}
         {isHomework && (
           <div className="absolute top-2 right-2">
-            <span
-              className={`text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm ${isCompleted
-                ? 'bg-green-500 text-white'
-                : 'bg-orange-500 text-white'
-                }`}
-            >
+            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shadow-sm ${isCompleted ? 'bg-green-500 text-white' : 'bg-orange-500 text-white'
+              }`}>
               {isCompleted ? '✓ DONE' : 'PENDING'}
             </span>
           </div>
         )}
 
-        {/* Completed Overlay */}
+        {/* Completed tint */}
         {isCompleted && (
-          <div className="absolute inset-0 bg-green-500/10 flex items-center
-                          justify-center">
+          <div className="absolute inset-0 bg-green-500/10 flex items-center justify-center">
             <HiOutlineCheckCircle className="w-10 h-10 text-green-500/50" />
           </div>
         )}
@@ -499,10 +410,8 @@ function GridCard({
 
       {/* Info */}
       <div className="px-3 pt-2.5 pb-2 flex-1">
-        <p
-          className={`text-[12.5px] font-semibold leading-snug line-clamp-2 ${isCompleted ? 'text-muted line-through' : 'text-dark'
-            }`}
-        >
+        <p className={`text-[12.5px] font-semibold leading-snug line-clamp-2 ${isCompleted ? 'text-muted text-green-700' : 'text-dark'
+          }`}>
           {item.title}
         </p>
         <div className="flex items-center gap-1.5 mt-1.5">
@@ -511,15 +420,14 @@ function GridCard({
         </div>
       </div>
 
-      {/* Bottom Action */}
+      {/* Actions */}
       <div className="px-3 pb-3">
         {isHomework && !isCompleted && !isConfirming && (
           <button
             onClick={onConfirmStart}
             disabled={isMarking}
-            className="w-full py-1.5 text-[11px] font-semibold rounded-lg
-                       bg-green-600 text-white hover:bg-green-700 transition-colors
-                       cursor-pointer disabled:opacity-50"
+            className="w-full py-1.5 text-[11px] font-semibold rounded-lg bg-green-600 text-white
+              hover:bg-green-700 transition-colors cursor-pointer disabled:opacity-50"
           >
             {isMarking ? '…' : '✓ Mark Done'}
           </button>
@@ -527,8 +435,8 @@ function GridCard({
 
         {isHomework && !isCompleted && isConfirming && (
           <div className="space-y-1.5">
-            <p className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1
-                          rounded-md flex items-start gap-1">
+            <p className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded-md
+              flex items-start gap-1">
               <HiOutlineExclamationTriangle className="w-3 h-3 shrink-0 mt-0.5" />
               Sure? Can't undo
             </p>
@@ -536,18 +444,16 @@ function GridCard({
               <button
                 onClick={onConfirmCancel}
                 disabled={isMarking}
-                className="flex-1 py-1 text-[10px] font-medium rounded-md border
-                           border-slate-200 text-muted hover:bg-slate-50
-                           cursor-pointer disabled:opacity-50"
+                className="flex-1 py-1 text-[10px] font-medium rounded-md border border-slate-200
+                  text-muted hover:bg-slate-50 cursor-pointer disabled:opacity-50"
               >
                 No
               </button>
               <button
                 onClick={onMarkComplete}
                 disabled={isMarking}
-                className="flex-1 py-1 text-[10px] font-semibold rounded-md
-                           bg-green-600 text-white hover:bg-green-700
-                           cursor-pointer disabled:opacity-50"
+                className="flex-1 py-1 text-[10px] font-semibold rounded-md bg-green-600 text-white
+                  hover:bg-green-700 cursor-pointer disabled:opacity-50"
               >
                 {isMarking ? '…' : 'Yes'}
               </button>
@@ -565,10 +471,9 @@ function GridCard({
         {!isHomework && hasFile && (
           <button
             onClick={onView}
-            className="w-full py-1.5 text-[11px] font-medium rounded-lg border
-                       border-slate-200 text-muted hover:bg-slate-50 hover:text-dark
-                       transition-colors cursor-pointer flex items-center
-                       justify-center gap-1.5"
+            className="w-full py-1.5 text-[11px] font-medium rounded-lg border border-slate-200
+              text-muted hover:bg-slate-50 hover:text-dark transition-colors cursor-pointer
+              flex items-center justify-center gap-1.5"
           >
             <HiOutlineEye className="w-3.5 h-3.5" />
             View File
@@ -582,74 +487,41 @@ function GridCard({
 // ── List Card ─────────────────────────────────────────────
 
 function ListCard({
-  item,
-  isHomework,
-  isCompleted,
-  isConfirming,
-  isMarking,
-  completedAt,
-  onView,
-  onConfirmStart,
-  onConfirmCancel,
-  onMarkComplete,
+  item, isHomework, isCompleted, isConfirming, isMarking, completedAt,
+  onView, onConfirmStart, onConfirmCancel, onMarkComplete,
 }) {
   const hasFile = !!item.fileUrl;
 
   const borderColor = isHomework
-    ? isCompleted
-      ? 'border-l-green-500'
-      : 'border-l-orange-500'
-    : item.type === 'note'
-      ? 'border-l-blue-500'
-      : 'border-l-purple-500';
+    ? isCompleted ? 'border-l-green-500' : 'border-l-orange-500'
+    : item.type === 'note' ? 'border-l-blue-500' : 'border-l-purple-500';
 
-  const iconBg = isHomework
-    ? isCompleted
-      ? 'bg-green-50'
-      : 'bg-orange-50'
-    : item.type === 'note'
-      ? 'bg-blue-50'
-      : 'bg-purple-50';
-
-  const iconColor = isHomework
-    ? isCompleted
-      ? 'text-green-600'
-      : 'text-orange-600'
-    : item.type === 'note'
-      ? 'text-blue-600'
-      : 'text-purple-600';
+  const iconStyle = isHomework
+    ? isCompleted ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'
+    : item.type === 'note' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600';
 
   return (
-    <Card
-      className={`border-l-4 ${borderColor} transition-all hover:shadow-md
-        ${isCompleted ? 'opacity-70' : ''}`}
-    >
+    <Card className={`border-l-4 ${borderColor} transition-all hover:shadow-md ${isCompleted ? 'opacity-70' : ''}`}>
       <div className="px-4 py-3 flex items-center gap-3">
-        {/* Icon / Quick View */}
+        {/* Icon / quick view */}
         {hasFile ? (
           <button
             onClick={onView}
-            className={`w-11 h-11 rounded-lg ${iconBg} flex items-center
-              justify-center hover:scale-105 transition-transform
-              cursor-pointer shrink-0`}
+            className={`w-11 h-11 rounded-lg ${iconStyle} flex items-center justify-center
+              hover:scale-105 transition-transform cursor-pointer shrink-0`}
           >
-            <HiOutlineEye className={`w-5 h-5 ${iconColor}`} />
+            <HiOutlineEye className="w-5 h-5" />
           </button>
         ) : (
-          <div
-            className="w-11 h-11 rounded-lg bg-slate-50 flex items-center
-                        justify-center shrink-0"
-          >
+          <div className="w-11 h-11 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
             <HiOutlineDocumentText className="w-5 h-5 text-slate-300" />
           </div>
         )}
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p
-            className={`text-[13px] font-semibold leading-snug truncate ${isCompleted ? 'text-muted line-through' : 'text-dark'
-              }`}
-          >
+          <p className={`text-[13px] font-semibold leading-snug truncate ${isCompleted ? 'text-muted line-through' : 'text-dark'
+            }`}>
             {item.title}
           </p>
           <div className="flex items-center gap-2.5 mt-1">
@@ -672,24 +544,20 @@ function ListCard({
             <button
               onClick={onConfirmStart}
               disabled={isMarking}
-              className="px-3 py-1.5 text-[11px] font-semibold rounded-lg
-                         bg-green-600 text-white hover:bg-green-700 transition-colors
-                         cursor-pointer disabled:opacity-50"
+              className="px-3 py-1.5 text-[11px] font-semibold rounded-lg bg-green-600 text-white
+                hover:bg-green-700 transition-colors cursor-pointer disabled:opacity-50"
             >
               {isMarking ? '…' : '✓ Done'}
             </button>
           )}
-          {isHomework && isCompleted && (
-            <Badge variant="success">Done</Badge>
-          )}
+          {isHomework && isCompleted && <Badge variant="success">Done</Badge>}
           {hasFile && (
             <a
               href={getDriveViewUrl(item.fileUrl)}
               target="_blank"
               rel="noopener noreferrer"
-              className="p-1.5 rounded-md hover:bg-slate-100 text-muted
-                         hover:text-dark transition-colors"
               title="Open in new tab"
+              className="p-1.5 rounded-md hover:bg-slate-100 text-muted hover:text-dark transition-colors"
             >
               <HiOutlineArrowTopRightOnSquare className="w-4 h-4" />
             </a>
@@ -697,32 +565,26 @@ function ListCard({
         </div>
       </div>
 
-      {/* Confirm Strip */}
+      {/* Confirm strip */}
       {isConfirming && !isCompleted && (
         <div className="px-4 pb-3">
-          <div className="flex items-center gap-2 p-2 bg-amber-50 border
-                          border-amber-200 rounded-lg">
-            <HiOutlineExclamationTriangle className="w-3.5 h-3.5 text-amber-600
-                                                      shrink-0" />
-            <p className="text-[11px] text-amber-800 flex-1">
-              Sure? Can't undo.
-            </p>
+          <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+            <HiOutlineExclamationTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <p className="text-[11px] text-amber-800 flex-1">Sure? Can't undo.</p>
             <div className="flex gap-1.5 shrink-0">
               <button
                 onClick={onConfirmCancel}
                 disabled={isMarking}
-                className="px-2.5 py-1 text-[10.5px] font-medium rounded-md border
-                           border-slate-200 text-muted hover:bg-white cursor-pointer
-                           disabled:opacity-50"
+                className="px-2.5 py-1 text-[10.5px] font-medium rounded-md border border-slate-200
+                  text-muted hover:bg-white cursor-pointer disabled:opacity-50"
               >
                 No
               </button>
               <button
                 onClick={onMarkComplete}
                 disabled={isMarking}
-                className="px-2.5 py-1 text-[10.5px] font-semibold rounded-md
-                           bg-green-600 text-white hover:bg-green-700 cursor-pointer
-                           disabled:opacity-50"
+                className="px-2.5 py-1 text-[10.5px] font-semibold rounded-md bg-green-600 text-white
+                  hover:bg-green-700 cursor-pointer disabled:opacity-50"
               >
                 {isMarking ? '…' : 'Yes'}
               </button>
@@ -734,25 +596,23 @@ function ListCard({
   );
 }
 
-// ── Fullscreen File Viewer ────────────────────────────────
+// ── File Viewer ───────────────────────────────────────────
 
 function FileViewer({ title, embedUrl, viewUrl, onClose }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex flex-col">
+      {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-3 bg-black/60
-                      backdrop-blur-sm border-b border-white/10">
-        <p className="text-white text-[14px] font-medium truncate flex-1 mr-4">
-          {title}
-        </p>
+        backdrop-blur-sm border-b border-white/10">
+        <p className="text-white text-[14px] font-medium truncate flex-1 mr-4">{title}</p>
         <div className="flex items-center gap-2">
           {viewUrl && (
             <a
               href={viewUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px]
-                         font-medium rounded-md bg-white/10 text-white
-                         hover:bg-white/20 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium rounded-md
+                bg-white/10 text-white hover:bg-white/20 transition-colors"
             >
               <HiOutlineArrowTopRightOnSquare className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Open in Drive</span>
@@ -760,13 +620,14 @@ function FileViewer({ title, embedUrl, viewUrl, onClose }) {
           )}
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-white/10 text-white
-                       transition-colors cursor-pointer"
+            className="p-2 rounded-lg hover:bg-white/10 text-white transition-colors cursor-pointer"
           >
             <HiOutlineXMark className="w-5 h-5" />
           </button>
         </div>
       </div>
+
+      {/* Content */}
       <div className="flex-1 relative bg-black">
         {embedUrl ? (
           <iframe
@@ -780,17 +641,14 @@ function FileViewer({ title, embedUrl, viewUrl, onClose }) {
           <div className="flex items-center justify-center h-full">
             <div className="text-center px-6">
               <HiOutlineDocumentText className="w-16 h-16 text-white/20 mx-auto mb-4" />
-              <p className="text-white/50 text-sm mb-4">
-                Cannot preview this file
-              </p>
+              <p className="text-white/50 text-sm mb-4">Cannot preview this file</p>
               {viewUrl && (
                 <a
                   href={viewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-[13px]
-                             font-medium rounded-lg bg-white text-dark
-                             hover:bg-slate-100 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium
+                    rounded-lg bg-white text-dark hover:bg-slate-100 transition-colors"
                 >
                   <HiOutlineArrowTopRightOnSquare className="w-4 h-4" />
                   Open in Google Drive
@@ -810,20 +668,14 @@ function ClassSkeleton({ viewMode }) {
   return (
     <div className="space-y-5">
       <div className="flex items-start justify-between">
-        <div>
-          <Skeleton className="h-7 w-24" />
-          <Skeleton className="h-4 w-40 mt-1.5" />
-        </div>
+        <Skeleton className="h-7 w-24" />
         <Skeleton className="h-8 w-18 rounded-lg" />
       </div>
       <Skeleton className="h-9 w-72 rounded-lg" />
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {[...Array(8)].map((_, i) => (
-            <div
-              key={i}
-              className="rounded-xl border-2 border-slate-100 bg-white overflow-hidden"
-            >
+            <div key={i} className="rounded-xl border-2 border-slate-100 bg-white overflow-hidden">
               <Skeleton className="w-full aspect-[4/3]" />
               <div className="px-3 py-2.5 space-y-1.5">
                 <Skeleton className="h-3.5 w-4/5" />

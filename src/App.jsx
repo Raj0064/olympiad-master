@@ -11,6 +11,7 @@ import Login from "./pages/Login.jsx";
 import NotFound from "./pages/ErrorPages/NotFound.jsx";
 import Unauthorized from "./pages/ErrorPages/Unauthorized.jsx";
 import ServerError from "./pages/ErrorPages/ServerError.jsx";
+import ExamInstructions from "./pages/student/StudentExamInstruction.jsx";
 
 // ── Lazy imports ─────────────────────────────────────────────────────────────
 // Every file below is split into its own JS chunk by Vite at build time.
@@ -54,21 +55,41 @@ const StudentDataProvider = lazy(() => import("./context/StudentdataContext.jsx"
 // calls, no heavy imports. A simple centred spinner is enough.
 const PageLoader = () => (
   <div style={{
+    position: "fixed",
+    inset: 0,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    height: "100vh",
-    background: "#f9fafb",
-  }}>
-    <div style={{
-      width: 40,
-      height: 40,
-      border: "4px solid #e5e7eb",
-      borderTopColor: "#6366f1",
-      borderRadius: "50%",
-      animation: "spin 0.8s linear infinite",
-    }} />
-    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    background: "linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)",
+    zIndex: 9999,
+  }}
+    role="status"
+    aria-label="Loading page"
+  >
+    <div style={{ textAlign: "center" }}>
+      <div style={{
+        width: 48,
+        height: 48,
+        margin: "0 auto 16px",
+        border: "4px solid #e5e7eb",
+        borderTopColor: "#6366f1",
+        borderRadius: "50%",
+        animation: "spin 0.7s linear infinite",
+      }} />
+      <p style={{
+        margin: 0,
+        fontSize: 14,
+        fontWeight: 500,
+        color: "#6b7280",
+        animation: "pulse 1.5s ease-in-out infinite",
+      }}>
+        Loading...
+      </p>
+    </div>
+    <style>{`
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    `}</style>
   </div>
 );
 
@@ -87,13 +108,23 @@ const App = () => (
         {/* ── Public ───────────────────────────────────────────────── */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
+        {/* <Route path="/register" element={<Register />} /> */}
         <Route path="/mentalmaths" element={<MentalMaths />} />
+
 
         {/* ── Error pages ──────────────────────────────────────────── */}
         <Route path="/unauthorized" element={<Unauthorized />} />
         <Route path="/error" element={<ServerError />} />
 
         {/* ── Student — full-screen (no layout shell) ───────────────── */}
+        <Route
+          path="/exam/:examId/instructions"
+          element={
+            <ProtectedRoute role="student">
+              <ExamInstructions />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/exam/:examId"
           element={
@@ -134,7 +165,8 @@ const App = () => (
         >
           <Route index element={<StudentDashboard />} />
           <Route path="exams" element={<StudentExams />} />
-          <Route path="classroom" element={<StudentClassPage />} />
+
+          <Route path="notes" element={<StudentClassPage />} />
           <Route path="performance" element={<StudentPerformance />} />
           <Route path="profile" element={<StudentProfile />} />
         </Route>

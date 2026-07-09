@@ -22,7 +22,6 @@ const Login = () => {
   }, [currentUser, userProfile]);
 
   // ── Redirect if logged in and profile is ready ────────────────────────
-  // loading=true while profile fetches so this only runs once profile is set
   if (currentUser) {
     if (profileError) {
       // falls through — shows error banner below
@@ -56,17 +55,20 @@ const Login = () => {
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-surface rounded-2xl shadow-lg p-8">
 
+        {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-primary">Olympiad Masters</h1>
           <p className="text-sm text-gray-400 mt-1">Sign in to continue</p>
         </div>
 
+        {/* Profile-load error */}
         {profileError && (
           <div className="bg-yellow-50 border border-yellow-300 text-yellow-700 text-sm px-4 py-3 rounded-xl mb-5">
             Could not load your profile. Please try signing in again.
           </div>
         )}
 
+        {/* Auth / account error */}
         {error && (
           <div className="bg-red-50 border border-red-300 text-red-600 text-sm px-4 py-3 rounded-xl mb-5">
             {error}
@@ -74,6 +76,8 @@ const Login = () => {
         )}
 
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
+
+          {/* Email */}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Email
@@ -88,6 +92,7 @@ const Login = () => {
             />
           </div>
 
+          {/* Password */}
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Password
@@ -113,6 +118,7 @@ const Login = () => {
             </div>
           </div>
 
+          {/* Submit */}
           <button
             type="submit"
             disabled={loginLoading}
@@ -122,7 +128,8 @@ const Login = () => {
           </button>
         </form>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
+        {/* Footer links */}
+        <p className="text-center text-xs text-gray-400 mt-5">
           Contact your teacher if you forgot your password.
         </p>
       </div>
