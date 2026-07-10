@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { getFullExam } from "../../services/exam.service";
 import { fetchSubmission } from "../../services/submission.service";
@@ -13,6 +13,7 @@ import {
   safeDivide,
   formatTime,
 } from '../../utils/safeHelpers';
+import { FractionText } from "../../components/exam/FractionText";
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -217,6 +218,8 @@ function SectionCard({ name, correct, total, marks, totalMarks }) {
 // ── Question Card ─────────────────────────────────────────
 
 function QuestionCard({ question, originalIndex, studentAnswer }) {
+
+  const [zoomedUrl, setZoomedUrl] = useState(null);  // ← ADD THIS
   if (!question) return null;
 
   const isSkipped = !studentAnswer;
@@ -283,19 +286,28 @@ function QuestionCard({ question, originalIndex, studentAnswer }) {
 
         {/* Question text */}
         {question.text && (
-          <p className="text-sm text-text-dark leading-relaxed font-medium whitespace-pre-wrap wrap-break-word ">
-            {question.text}
+          <p className="text-sm text-text-dark leading-relaxed font-medium whitespace-pre-wrap wrap-break-word">
+            <FractionText text={question.text} />
           </p>
         )}
 
         {/* Question image */}
         {question.imageUrl && (
-          <img
-            src={question.imageUrl}
-            alt={`Question ${originalIndex + 1}`}
-            className="rounded-xl max-h-52 w-auto object-contain border border-border"
-            onError={(e) => { e.target.style.display = "none"; }}
-          />
+          <div className="relative w-fit group">
+            <img
+              src={question.imageUrl}
+              alt={`Question ${originalIndex + 1}`}
+              className="rounded-xl max-h-52 w-auto object-contain border border-border cursor-zoom-in"
+              onClick={() => setZoomedUrl(question.imageUrl)}
+              onError={(e) => { e.target.parentElement.style.display = 'none'; }}
+            />
+            <button
+              onClick={() => setZoomedUrl(question.imageUrl)}
+              className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+            >
+              🔍 Zoom
+            </button>
+          </div>
         )}
 
         {/* No content fallback */}
@@ -386,20 +398,48 @@ function QuestionCard({ question, originalIndex, studentAnswer }) {
             </div>
             {question.explanation && (
               <p className="text-sm text-text-dark leading-relaxed whitespace-pre-wrap break-words">
-                {question.explanation}
+                <FractionText text={question.explanation} />
               </p>
             )}
             {question.explanationImageUrl && (
-              <img
-                src={question.explanationImageUrl}
-                alt="Explanation"
-                className="rounded-lg max-h-40 object-contain mt-2.5 border border-info/20"
-                onError={(e) => { e.target.style.display = "none"; }}
-              />
+              <div className="relative w-fit group mt-2.5">
+                <img
+                  src={question.explanationImageUrl}
+                  alt="Explanation"
+                  className="rounded-lg max-h-40 object-contain border border-info/20 cursor-zoom-in"
+                  onClick={() => setZoomedUrl(question.explanationImageUrl)}
+                  onError={(e) => { e.target.parentElement.style.display = 'none'; }}
+                />
+                <button
+                  onClick={() => setZoomedUrl(question.explanationImageUrl)}
+                  className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+                >
+                  🔍 Zoom
+                </button>
+              </div>
             )}
           </div>
         )}
       </div>
+      {zoomedUrl && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setZoomedUrl(null)}
+        >
+          <button
+            onClick={() => setZoomedUrl(null)}
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white text-lg backdrop-blur hover:bg-white/20 transition-colors"
+          >
+            ✕
+          </button>
+          <img
+            src={zoomedUrl}
+            alt="Zoomed"
+            className="max-h-full max-w-full rounded-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -410,6 +450,7 @@ export default function Results() {
   const { examId } = useParams();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();  // ← ADD
 
   const [exam, setExam] = useState(null);
   const [submission, setSubmission] = useState(null);
@@ -607,7 +648,11 @@ export default function Results() {
 
           {/* Back button */}
           <button
-            onClick={() => navigate(-1)}
+            onClick={() =>
+              location.state?.fromExam
+                ? navigate('/student')
+                : navigate(-1)
+            }
             className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-background transition-colors cursor-pointer shrink-0"
             title="Back to Dashboard"
           >

@@ -84,7 +84,7 @@ const SuccessDialog = ({ submitting, submitResult, examId, isResultPublished }) 
               {/* Only show if results are published */}
               {isResultPublished && (
                 <button
-                  onClick={() => navigate(`/student/results/${examId}`)}
+                    onClick={() => navigate(`/student/results/${examId}`, { state: { fromExam: true } })}
                   className="flex-1 py-3 rounded-xl bg-accent text-white font-bold text-sm hover:bg-primary transition cursor-pointer"
                 >
                   View Results

@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { ExamContext } from "../../context/ExamContext";
 import { MdOutlineZoomOutMap } from "react-icons/md";
+import { FractionText } from "./FractionText";
 
 const SIZE_CLASS = {
   small: "h-28 md:h-36",
@@ -36,19 +37,23 @@ const QuestionCard = () => {
         : hasText && hasImage && currentQuestion.text.trim().length <= 120 ? "text-top"
           : "split";
 
+
   function renderText(text) {
-    // Match either:
-    // - newline + letter + . or ) + space   (e.g., "\nA) ", "\na. ")
-    // - newline + (letter) + space          (e.g., "\n(a) ", "\n(A) ")
     const match = text?.match(/\n((?:[A-Da-d][.)]|\([A-Da-d]\))\s)/);
-    if (!match) return <span className="font-semibold">{text}</span>;
+    if (!match) {
+      return (
+        <span className="font-semibold">
+          <FractionText text={text} />
+        </span>
+      );
+    }
     const idx = text.indexOf('\n' + match[1]);
     const question = text.slice(0, idx).trim();
     const rest = text.slice(idx).trim();
     return (
       <>
-        <span className="font-semibold">{question}</span>
-        {'\n'}{rest}
+        <span className="font-semibold"><FractionText text={question} /></span>
+        {'\n'}<FractionText text={rest} />
       </>
     );
   }
