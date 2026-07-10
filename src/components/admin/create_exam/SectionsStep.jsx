@@ -5,6 +5,7 @@ import { AiOutlineEdit } from "react-icons/ai";
 import { RiDeleteBin6Line } from "react-icons/ri";
 import { IoCopyOutline } from "react-icons/io5";
 import ExportModal from "./Exportmodal";
+import TextImportPanel from "./Textimportpanel";
 
 const OPTIONS = ["A", "B", "C", "D"];
 const SIZES = [
@@ -1384,6 +1385,24 @@ export default function SectionsStep({
     exitSelectMode();
   };
 
+
+  // Text Import
+  const handleTextImport = (parsedQuestions) => {
+    setSections((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSectionId) return s;
+        const startIdx = s.questions.length;
+        const newQs = parsedQuestions.map((q, i) => ({
+          ...q,
+          order: startIdx + i,
+        }));
+        return { ...s, questions: [...s.questions, ...newQs] };
+      })
+    );
+    setImportTab('manual');
+    closeForm();
+  };
+
   // ── GForm import ──────────────────────────────────────────────────────────────
   const handleGFormImport = (parsed) => {
     parsed.sections.forEach((s) =>
@@ -1494,6 +1513,7 @@ export default function SectionsStep({
           <div className="flex gap-0 mb-5 border border-border rounded-lg p-0.5 bg-background w-fit">
             {[
               ["manual", "Manual Entry"],
+              ["text", "📝 Paste Text"],
               ["gform", "Google Form"],
             ].map(([k, label]) => (
               <button
@@ -1519,6 +1539,11 @@ export default function SectionsStep({
             <GoogleFormPanel
               onImport={handleGFormImport}
               hasExistingQuestions={totalExistingQ > 0}
+            />
+          ) : importTab === "text" ? (
+            <TextImportPanel
+              onImport={handleTextImport}
+              hasExistingQuestions={activeSection.questions.length > 0}
             />
           ) : (
             <>

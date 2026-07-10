@@ -154,6 +154,12 @@ export async function createExam(examData, sections) {
         googleFormItemId: q.googleFormItemId || "",
         isNameField: q.isNameField || false,
         isEmailField: q.isEmailField || false,
+
+        // ✅ ADD THESE
+        topicId: q.topicId || "",
+        topicName: q.topicName || "",
+        subtopicId: q.subtopicId || "",
+        subtopicName: q.subtopicName || "",
       });
     });
   });
@@ -372,6 +378,12 @@ export async function updateExamFull(
         googleFormItemId: q.googleFormItemId || "",
         isNameField: q.isNameField || false,
         isEmailField: q.isEmailField || false,
+
+        // ✅ ADD THESE
+        topicId: q.topicId || "",
+        topicName: q.topicName || "",
+        subtopicId: q.subtopicId || "",
+        subtopicName: q.subtopicName || "",
       };
 
       if (q._firestoreId) {
