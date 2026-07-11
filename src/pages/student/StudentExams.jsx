@@ -165,7 +165,7 @@ export default function StudentExams() {
                 status={status}
                 deadlinePassed={deadlinePassed}
                 submission={submission}
-                onEnter={() => navigate(`/exam/${exam.id}`)}
+                onEnter={() => navigate(`/exam/${exam.id}/instructions`)}
                 onResume={() => navigate(`/exam/${exam.id}`)}
                 onResult={() => navigate(`/student/results/${exam.id}`)}
               />

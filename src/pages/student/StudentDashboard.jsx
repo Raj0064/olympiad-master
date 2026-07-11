@@ -267,8 +267,7 @@ export default function StudentDashboard() {
                     return (
                       <li
                         key={exam.id}
-                        onClick={() => !deadlinePassed && navigate(`/exam/${exam.id}`)}
-                        className={`flex items-center justify-between px-4 py-3 gap-3 transition-colors ${deadlinePassed ? 'cursor-not-allowed opacity-60' : 'hover:bg-slate-50/50 cursor-pointer'
+                        onClick={() => !deadlinePassed && navigate(`/exam/${exam.id}/instructions`)}                        className={`flex items-center justify-between px-4 py-3 gap-3 transition-colors ${deadlinePassed ? 'cursor-not-allowed opacity-60' : 'hover:bg-slate-50/50 cursor-pointer'
                           }`}
                       >
                         <div className="min-w-0">

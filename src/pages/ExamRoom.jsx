@@ -84,6 +84,15 @@ function ExamRoomContent() {
   const [submitResult, setSubmitResult] = useState(null);
   const [isResultPublished, setIsResultPublished] = useState(false);
 
+  const [isFullscreen, setIsFullscreen] = useState(
+    !!(document.fullscreenElement || document.webkitFullscreenElement)
+  );
+
+  // ADD THESE:
+  const [showBackWarning, setShowBackWarning] = useState(false);
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [showTabWarning, setShowTabWarning] = useState(false);
+
   const submittingRef = useRef(false);
   const timeLeftRef = useRef(timeLeft);
   const answersRef = useRef(answers);
@@ -178,6 +187,67 @@ function ExamRoomContent() {
     if (isExpired) handleConfirmedSubmit();
   }, [isExpired, handleConfirmedSubmit]);
 
+  // ── Request fullscreen on exam load ──────────────────────────────────
+  useEffect(() => {
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen;
+    if (req) req.call(el).catch(() => { });
+
+    return () => {
+      const isFs = document.fullscreenElement || document.webkitFullscreenElement;
+      if (isFs) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (exit) exit.call(document).catch(() => { });
+      }
+    };
+  }, []);
+
+  // ── Track fullscreen changes ──────────────────────────────────────────
+  useEffect(() => {
+    const onChange = () => {
+      setIsFullscreen(!!(document.fullscreenElement || document.webkitFullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onChange);
+      document.removeEventListener('webkitfullscreenchange', onChange);
+    };
+  }, []);
+
+  // ── Block browser back button ─────────────────────────────────────────
+  useEffect(() => {
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      window.history.pushState(null, '', window.location.href);
+      setShowBackWarning(true);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // ── Detect tab switching ──────────────────────────────────────────────
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) {
+        setTabSwitchCount(prev => prev + 1);
+        setShowTabWarning(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
+  // ── Warn on refresh / close ───────────────────────────────────────────
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
   // ── Navigation ────────────────────────────────────────────────────────────
   const goPrev = () => { if (!isFirst) setCurrentQuestionId(questions[safeIndex - 1].id); };
   const goNext = () => { if (!isLast) setCurrentQuestionId(questions[safeIndex + 1].id); };
@@ -206,7 +276,30 @@ function ExamRoomContent() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-background text-text-dark">
+
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-background text-text-dark">
+
+        {/* ── Fullscreen warning banner ── */}
+        {!isFullscreen && !submitResult && !submitting && (
+        <div className="shrink-0 z-[90] bg-orange-500 text-white
+  text-xs font-semibold py-2 px-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span>⚠️</span>
+              <span>Please stay fullscreen during the exam</span>
+            </div>
+            <button
+              onClick={() => {
+                const el = document.documentElement;
+                const req = el.requestFullscreen || el.webkitRequestFullscreen;
+                if (req) req.call(el).catch(() => { });
+              }}
+              className="bg-white text-orange-600 px-3 py-1 rounded-lg text-[11px]
+          font-bold shrink-0 hover:bg-orange-50 transition-colors cursor-pointer"
+            >
+              Re-enter Fullscreen
+            </button>
+          </div>
+        )}
 
       {/* ── Top Bar ── */}
       <div className="shrink-0">
@@ -402,6 +495,47 @@ function ExamRoomContent() {
           examId={exam.id}
           isResultPublished={isResultPublished}
         />
+      )}
+
+      {/* ── Back button warning ── */}
+      {showBackWarning && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-surface rounded-2xl border border-border p-6 max-w-sm w-full text-center shadow-xl">
+            <div className="text-3xl mb-3">🚫</div>
+            <h3 className="text-base font-bold text-primary mb-2">Cannot Go Back</h3>
+            <p className="text-sm text-text-muted mb-5">
+              Navigation is disabled during the exam. Please complete and submit the exam.
+            </p>
+            <button
+              onClick={() => setShowBackWarning(false)}
+              className="w-full h-11 rounded-xl bg-accent text-white text-sm font-bold hover:opacity-90 transition cursor-pointer"
+            >
+              Continue Exam
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab switch warning ── */}
+      {showTabWarning && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-surface rounded-2xl border border-border p-6 max-w-sm w-full text-center shadow-xl">
+            <div className="text-3xl mb-3">⚠️</div>
+            <h3 className="text-base font-bold text-primary mb-2">Tab Switch Detected</h3>
+            <p className="text-sm text-text-muted mb-1">
+              You switched away from the exam tab.
+            </p>
+            <p className="text-xs text-orange-500 font-semibold mb-5">
+              Violation #{tabSwitchCount} — This activity may be reported.
+            </p>
+            <button
+              onClick={() => setShowTabWarning(false)}
+              className="w-full h-11 rounded-xl bg-accent text-white text-sm font-bold hover:opacity-90 transition cursor-pointer"
+            >
+              Return to Exam
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
