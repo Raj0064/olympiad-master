@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { FiEyeOff } from "react-icons/fi";
 import { BsEye } from "react-icons/bs";
 
 const Login = () => {
   const { login, logout, currentUser, userProfile, profileError } = useAuth();
+
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get('redirect');
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -22,14 +25,32 @@ const Login = () => {
   }, [currentUser, userProfile]);
 
   // ── Redirect if logged in and profile is ready ────────────────────────
+  // if (currentUser) {
+  //   if (profileError) {
+  //     // falls through — shows error banner below
+  //   } else if (userProfile && !userProfile.disabled) {
+  //     if (userProfile.role === "admin") return <Navigate to="/admin" replace />;
+  //     if (userProfile.role === "student") return <Navigate to="/student" replace />;
+  //   }
+  // }
+
   if (currentUser) {
     if (profileError) {
-      // falls through — shows error banner below
     } else if (userProfile && !userProfile.disabled) {
+      // Security: students can never be redirected to admin routes
+      const safeRedirect =
+        redirectTo &&
+          !(userProfile.role === 'student' && redirectTo.startsWith('/admin'))
+          ? redirectTo
+          : null;
+
+      if (safeRedirect) return <Navigate to={safeRedirect} replace />;
       if (userProfile.role === "admin") return <Navigate to="/admin" replace />;
       if (userProfile.role === "student") return <Navigate to="/student" replace />;
     }
   }
+
+
 
   const handleLogin = async (e) => {
     e.preventDefault();

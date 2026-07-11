@@ -16,6 +16,7 @@ import Loader from '../../components/ui/Loader.jsx';
 import EmptyState from '../../components/ui/EmptyState.jsx';
 import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { MdOutlineLeaderboard } from 'react-icons/md';
+import ShareLinkButton from '../../components/admin/ShareLinkButton.jsx';
 
 // ─── Toggle ───────────────────────────────────────────────────────────────────
 function Toggle({ checked, onChange, disabled }) {
@@ -105,6 +106,7 @@ function ExamMobileCard({
         >
           Submissions
         </button>
+        <ShareLinkButton examId={exam.id} />
         <button
           onClick={() => onDelete(exam)}
           className="text-xs font-medium text-danger hover:underline transition-colors ml-auto"
@@ -352,6 +354,7 @@ export default function AdminExams() {
                             >
                               <MdOutlineLeaderboard className="text-base" />
                             </Button>
+                            <ShareLinkButton examId={e.id} />
                             <button
                               onClick={() => setDeleteTarget({ id: e.id, title: e.title })}
                               className="text-xs font-medium text-danger hover:underline transition-colors"

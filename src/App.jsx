@@ -25,6 +25,8 @@ const Leaderboard = lazy(() => import("./pages/Leaderboard.jsx"));
 const MentalMaths = lazy(() => import("./pages/MentalMaths.jsx"));
 const StudentResultDetail = lazy(() => import("./pages/student/StudentResultDetail.jsx"));
 
+const JoinExamPage = lazy(() => import('./pages/JoinExamPage.jsx'));
+
 // Student layout + children
 const StudentLayout = lazy(() => import("./components/student/StudentLayout.jsx"));
 const StudentDashboard = lazy(() => import("./pages/student/StudentDashboard.jsx"));
@@ -194,6 +196,9 @@ const App = () => (
           <Route path="results" element={<AdminResults />} />
           <Route path="profile" element={<StudentProfile />} />
         </Route>
+
+        {/* ── Join links (WhatsApp sharing) ───────────────── */}
+        <Route path="/join/exam/:examId" element={<JoinExamPage />} />
 
         {/* ── 404 — must be last ────────────────────────────────────── */}
         <Route path="*" element={<NotFound />} />
